@@ -8,7 +8,7 @@ const $ = (id) => document.getElementById(id);
 if (!$('empty') || !$('banner') || !document.querySelector('input[name="timing"]')) {
   let tried = false;
   try { tried = sessionStorage.getItem('retsim-reloaded') === '1'; sessionStorage.setItem('retsim-reloaded', '1'); } catch (e) { tried = true; }
-  if (!tried) location.reload();
+  if (!tried) { const u = new URL(location.href); u.searchParams.set('fresh', Date.now()); location.replace(u); }
   throw new Error('Page and script versions differ; reloading.');
 }
 try { sessionStorage.removeItem('retsim-reloaded'); } catch (e) { /* storage blocked */ }
