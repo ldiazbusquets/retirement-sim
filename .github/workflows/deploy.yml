@@ -1,0 +1,57 @@
+name: Test and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Engine tests (sim.js vs Python reference)
+        run: python -m unittest discover -s tests -v
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build site folder
+        run: |
+          mkdir _site
+          cp index.html styles.css app.js sim.js sw.js manifest.webmanifest favicon.svg *.png _site/
+          mkdir _site/data && cp data/*.json _site/data/
+          SHA="${GITHUB_SHA::7}"
+          # Version the asset links so browsers never mix an old script with a new page.
+          sed -i -E "s#\./(styles\.css|sim\.js|app\.js)\"#./\1?v=${SHA}\"#g" _site/index.html
+          sed -i "s/__BUILD_ID__/${SHA}/" _site/sw.js
+          sed -i -E "s#'\./(styles\.css|sim\.js|app\.js)'#'./\1?v=${SHA}'#g" _site/sw.js
+          grep -n "v=${SHA}" _site/index.html _site/sw.js
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

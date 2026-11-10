@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Retirement Simulator: a Monte Carlo simulation of retirement savings built on S&P 500 annual returns, 1930-2023. FIN 414 Applied Project I.">
+  <title>Retirement Simulator · Monte Carlo savings planner</title>
+  <script>
+    /* Theme before first paint: saved choice, else light 7am to 7pm. */
+    (function () {
+      var saved = null;
+      try { saved = localStorage.getItem('retsim-theme'); } catch (e) {}
+      var h = new Date().getHours();
+      if (saved ? saved === 'light' : (h >= 7 && h < 19)) document.documentElement.classList.add('lt');
+    })();
+  </script>
+  <meta name="theme-color" content="#080c13">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="./favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Retirement Sim">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist+Mono:wght@400;500&family=Manrope:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="w top-row">
+      <a class="wordmark" href="#simulator">Retirement <span>Simulator</span></a>
+      <nav class="nav" aria-label="Sections">
+        <a href="#simulator">Simulator</a>
+        <a href="#results">Results</a>
+        <a href="#method">Method</a>
+      </nav>
+      <div class="top-right">
+        <button class="install-btn" id="install-btn" type="button">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8m0 0 3-3m-3 3L5 7M3 13h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Install app</span>
+        </button>
+        <button class="icon-btn" id="theme-toggle" type="button" aria-label="Switch theme">
+          <svg class="i-sun" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="3.4" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M10 2.5v1.8M10 15.7v1.8M2.5 10h1.8M15.7 10h1.8M4.7 4.7l1.3 1.3M14 14l1.3 1.3M4.7 15.3 6 14M14 6l1.3-1.3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <svg class="i-moon" viewBox="0 0 20 20" aria-hidden="true"><path d="M15.5 12.6A6 6 0 0 1 7.4 4.5a6 6 0 1 0 8.1 8.1Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <canvas class="hero-tiles" id="hero-tiles" aria-hidden="true"></canvas>
+      <div class="w hero-inner">
+        <p class="eyebrow">FIN 414 · Applied Project I · built from Mini Project 2</p>
+        <h1 class="hero-title">Will your savings reach <span class="acc">your goal?</span></h1>
+        <p class="hero-copy">Enter your age, what you save each year and the amount you want at retirement. The simulator plays out thousands of possible futures for the stock market, using 94 years of S&amp;P 500 returns, and shows how often you get there.</p>
+      </div>
+    </section>
+
+    <div class="w layout" id="simulator">
+      <!-- ============ inputs ============ -->
+      <form class="glass panel inputs" id="form" novalidate aria-labelledby="inputs-h">
+        <div class="panel-head">
+          <h2 id="inputs-h">Your plan</h2>
+          <button class="link-btn" type="button" id="reset-btn">Reset to Emma's example</button>
+        </div>
+
+        <div class="row2">
+          <div class="field">
+            <label for="currentAge">Current age</label>
+            <input id="currentAge" name="currentAge" inputmode="numeric" autocomplete="off" aria-describedby="currentAge-msg">
+            <p class="msg" id="currentAge-msg" aria-live="polite"></p>
+          </div>
+          <div class="field">
+            <label for="retirementAge">Retirement age</label>
+            <input id="retirementAge" name="retirementAge" inputmode="numeric" autocomplete="off" aria-describedby="retirementAge-msg">
+            <p class="msg" id="retirementAge-msg" aria-live="polite"></p>
+          </div>
+        </div>
+        <div class="field">
+          <label for="contribution">Annual contribution</label>
+          <div class="money"><span aria-hidden="true">$</span><input id="contribution" name="contribution" inputmode="decimal" autocomplete="off" aria-describedby="contribution-msg"></div>
+          <p class="msg" id="contribution-msg" aria-live="polite"></p>
+        </div>
+        <div class="field">
+          <label for="startBalance">Current savings</label>
+          <div class="money"><span aria-hidden="true">$</span><input id="startBalance" name="startBalance" inputmode="decimal" autocomplete="off" aria-describedby="startBalance-msg"></div>
+          <p class="msg" id="startBalance-msg" aria-live="polite"></p>
+        </div>
+        <div class="field">
+          <label for="goal">Retirement goal</label>
+          <div class="money"><span aria-hidden="true">$</span><input id="goal" name="goal" inputmode="decimal" autocomplete="off" aria-describedby="goal-msg"></div>
+          <p class="msg" id="goal-msg" aria-live="polite"></p>
+        </div>
+
+        <details class="advanced" id="advanced">
+          <summary>Simulation settings</summary>
+          <div class="field">
+            <label for="model">Return model</label>
+            <select id="model" name="model" aria-describedby="model-help">
+              <option value="normal">Normal distribution (Mini Project 2)</option>
+              <option value="historical">Historical years, resampled</option>
+            </select>
+            <p class="help" id="model-help"></p>
+          </div>
+          <div class="field">
+            <label for="timing">Contributions made</label>
+            <select id="timing" name="timing">
+              <option value="end">End of each year (Mini Project 2)</option>
+              <option value="begin">Beginning of each year</option>
+            </select>
+          </div>
+          <div class="row2">
+            <div class="field">
+              <label for="simulations">Simulations</label>
+              <select id="simulations" name="simulations"></select>
+            </div>
+            <div class="field">
+              <label for="seed">Random seed</label>
+              <input id="seed" name="seed" inputmode="numeric" autocomplete="off" aria-describedby="seed-msg seed-help">
+              <p class="msg" id="seed-msg" aria-live="polite"></p>
+            </div>
+          </div>
+          <p class="help" id="seed-help">The same seed and inputs always give the same results. <button class="link-btn" type="button" id="new-seed">New seed</button></p>
+        </details>
+
+        <button class="run-btn" type="submit" id="run-btn">Run simulation</button>
+        <p class="stale" id="stale" hidden>Inputs changed. Run again to update the results.</p>
+      </form>
+
+      <!-- ============ results ============ -->
+      <section class="results" id="results" aria-labelledby="results-h" aria-busy="false">
+        <h2 class="sr-only" id="results-h">Results</h2>
+        <div class="glass panel headline">
+          <div class="gauge" id="gauge" aria-hidden="true"></div>
+          <div>
+            <p class="kicker">Chance of reaching your goal</p>
+            <p class="big" id="prob">–</p>
+            <p class="verdict" id="verdict" aria-live="polite"></p>
+          </div>
+        </div>
+
+        <div class="stats" id="stats"></div>
+
+        <div class="glass panel chart-panel">
+          <div class="panel-head">
+            <h3>Where you could end up</h3>
+            <p class="legend"><span class="sw sw-hit"></span>Reached goal <span class="sw sw-miss"></span>Fell short <span class="sw sw-goal"></span>Goal</p>
+          </div>
+          <p class="sub" id="hist-sub"></p>
+          <div class="chart" id="hist"></div>
+        </div>
+
+        <div class="glass panel chart-panel">
+          <div class="panel-head">
+            <h3>How your savings grow</h3>
+            <p class="legend"><span class="sw sw-band"></span>Middle 90% <span class="sw sw-band2"></span>Middle 50% <span class="sw sw-med"></span>Median <span class="sw sw-paid"></span>Amount you put in</p>
+          </div>
+          <p class="sub">Range of balances by age across all simulations.</p>
+          <div class="chart" id="fan"></div>
+        </div>
+
+        <div class="glass panel">
+          <div class="panel-head">
+            <h3>Percentiles and scenarios</h3>
+            <div class="actions">
+              <button class="ghost-btn" type="button" id="pin-btn">Save as scenario A</button>
+              <button class="ghost-btn" type="button" id="csv-btn">Download CSV</button>
+            </div>
+          </div>
+          <div class="table-wrap"><table class="ptable" id="ptable"></table></div>
+          <p class="sub" id="pin-note"></p>
+        </div>
+      </section>
+    </div>
+
+    <!-- ============ method ============ -->
+    <section class="w method" id="method" aria-labelledby="method-h">
+      <h2 id="method-h">How it works</h2>
+      <div class="method-grid">
+        <article class="glass panel">
+          <h3>1 · The data</h3>
+          <p>Year-end closing values of the S&amp;P 500 index (Yahoo Finance, ^GSPC) from 1929 to 2023, the same data request as Mini Project 2. Each year's return is the change from one year-end close to the next, which gives 94 annual returns from 1930 to 2023.</p>
+          <p class="facts" id="data-facts"></p>
+        </article>
+        <article class="glass panel">
+          <h3>2 · One simulated future</h3>
+          <p>Each year until retirement, the simulator draws a return and updates the balance:</p>
+          <p class="formula"><code>end of year: B = B × (1 + r) + C</code><br><code>start of year: B = (B + C) × (1 + r)</code></p>
+          <p>With the normal model, <code>r</code> is drawn from a normal distribution with the historical mean and standard deviation (a return can't fall below −100%). With the historical model, <code>r</code> is one of the 94 real years, picked at random with replacement.</p>
+        </article>
+        <article class="glass panel">
+          <h3>3 · Thousands of futures</h3>
+          <p>Repeating this 10,000 times (or the number you choose) gives a spread of final balances. The chance of reaching the goal is the share of simulations that end at or above it. Percentiles use linear interpolation, the same method as NumPy.</p>
+          <p>The random numbers are seeded, so anyone can reproduce a result exactly. The website engine is checked against an independent Python version on every update.</p>
+        </article>
+        <article class="glass panel">
+          <h3>What it leaves out</h3>
+          <ul>
+            <li>Dividends: the index is price only, so returns are understated by roughly 2 to 4 points a year over long periods.</li>
+            <li>Inflation and taxes: all amounts are in today's nominal dollars, before tax.</li>
+            <li>Diversification: the whole balance is in the S&amp;P 500, with no bonds or cash.</li>
+            <li>The past is not a forecast: future returns may differ from 1930–2023.</li>
+          </ul>
+          <p class="sub">An educational tool for a class project, not financial advice.</p>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="w foot-row">
+      <p>Retirement Simulator · FIN 414 AI Applications in Finance, Bryant University</p>
+      <p>Data: Yahoo Finance ^GSPC, 1929–2023 · <a href="https://github.com/ldiazbusquets/retirement-sim">Source code</a></p>
+    </div>
+  </footer>
+
+  <dialog class="install-dlg" id="install-dlg" aria-labelledby="install-h">
+    <h2 id="install-h">Install the app</h2>
+    <p id="install-steps"></p>
+    <form method="dialog"><button class="ghost-btn" type="submit">Close</button></form>
+  </dialog>
+
+  <script src="./sim.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
