@@ -66,7 +66,8 @@ html.lt .i-moon { display: block; }
 
 /* ---------- hero ---------- */
 .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--ln); }
-.hero-tiles { position: absolute; inset: 0; width: 100%; height: 100%; display: block; -webkit-mask-image: radial-gradient(115% 100% at 88% 28%, #000 22%, rgba(0,0,0,.55) 52%, transparent 88%); mask-image: radial-gradient(115% 100% at 88% 28%, #000 22%, rgba(0,0,0,.55) 52%, transparent 88%); }
+.hero-tiles { position: absolute; inset: 0; width: 100%; height: 100%; display: block; -webkit-mask-image: linear-gradient(90deg, transparent 46%, rgba(0,0,0,.6) 58%, #000 70%); mask-image: linear-gradient(90deg, transparent 46%, rgba(0,0,0,.6) 58%, #000 70%); }
+@media (max-width: 700px) { .hero-tiles { -webkit-mask-image: linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.3)); mask-image: linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.3)); } }
 .hero-inner { position: relative; z-index: 1; padding-top: clamp(32px, 5vw, 56px); padding-bottom: clamp(36px, 5vw, 60px); }
 .eyebrow { font: 500 11.5px/1.4 var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--t3); margin-bottom: 16px; }
 .hero-title { font: 300 clamp(36px, 6vw, 76px)/1.03 var(--sans); letter-spacing: -.045em; max-width: 14ch; }

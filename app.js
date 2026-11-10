@@ -316,7 +316,7 @@ function downloadCSV() {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-/* ---------------- theme, glass, tiles ---------------- */
+/* ---------------- theme, glass, hero ---------------- */
 function syncThemeButton() {
   const lt = document.documentElement.classList.contains('lt');
   $('theme-toggle').setAttribute('aria-label', lt ? 'Switch to dark theme' : 'Switch to light theme');
@@ -335,41 +335,78 @@ document.addEventListener('pointermove', (e) => {
   g.style.setProperty('--my', `${e.clientY - r.top}px`);
 }, { passive: true });
 
-/* Hero tiles: a grid of small "windows", each fading on its own seeded sine wave (same
-   technique as the LDB Finance hero). Paused off screen, in hidden tabs and for reduced motion. */
+/* Hero animation: real simulated savings paths. Each line is one of Emma's simulated futures
+   from the engine below (age 30 to 65), drawn left to right like a simulation running, then
+   fading out while new ones start. Lines that end above the goal are drawn brighter; the
+   dashed line is the goal. Paused off screen, in hidden tabs and for reduced motion. */
 const tiles = (() => {
   const cv = $('hero-tiles'), ctx = cv.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const SX = 16, SY = 15, TW = 10, TH = 6, t0 = performance.now();
-  let list = [], W = 0, H = 0, run = false, vis = true, last = 0;
-  const seed = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  const POOL = 160, DRAW_MS = 3200, HOLD_MS = 2600, FADE_MS = 3600, EVERY_MS = 520;
+  const sim = S.simulate({ ...S.DEFAULTS, simulations: POOL, seed: 414 });
+  const years = sim.years, goal = S.DEFAULTS.goal;
+  const finals = Array.from(sim.outcomes).sort((a, b) => a - b);
+  const top = finals[Math.floor(POOL * 0.96)];
+  // Square-root scale keeps both the slow early years and the wide late spread visible.
+  const yv = (w) => Math.sqrt(Math.max(w, 0) / top);
+  const paths = Array.from({ length: POOL }, (_, s) => {
+    const pts = [];
+    for (let y = 0; y <= years; y++) pts.push(yv(sim.paths[s * (years + 1) + y]));
+    return { pts, hit: sim.outcomes[s] >= goal };
+  });
+  let W = 0, H = 0, x0 = 0, x1 = 0, yTop = 0, yBot = 0, run = false, vis = true, last = 0, lastSpawn = -1e9, next = 0;
+  const live = [];
   function size() {
     const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
     W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    list = [];
-    const cols = Math.ceil(W / SX) + 1, rows = Math.ceil(H / SY) + 1;
-    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
-      const id = y * 1000 + x, a = seed(id), b = seed(id + 9973), c = seed(id + 19997);
-      list.push({ x: x * SX + 3, y: y * SY + 4, base: 0.05 + a * 0.07, peak: c < 0.22 ? 0.55 + b * 0.4 : 0.14 + b * 0.12, sp: 0.05 + b * 0.16, ph: a * 6.283 });
-    }
+    const narrow = W < 700;
+    x0 = narrow ? W * 0.04 : Math.max(W * 0.5, 720); x1 = W * 0.985; yTop = H * 0.1; yBot = H * 0.92;
+    if (still) { live.length = 0; for (let i = 0; i < 48; i++) live.push({ p: paths[i], t0: -1e9, still: true }); }
     draw(performance.now());
   }
+  const px = (i) => x0 + (x1 - x0) * (i / years);
+  const py = (v) => yBot - (yBot - yTop) * Math.min(v, 1.08);
+  const ease = (t) => 1 - (1 - t) ** 3;
   function draw(now) {
-    const lt = document.documentElement.classList.contains('lt'), t = (now - t0) / 1000;
+    const lt = document.documentElement.classList.contains('lt');
+    const base = lt ? '31,91,151' : '116,169,221', hi = lt ? '16,52,96' : '232,240,248';
     ctx.clearRect(0, 0, W, H);
-    ctx.fillStyle = lt ? 'rgb(31,91,151)' : 'rgb(116,169,221)';
-    const k = lt ? 0.5 : 1;
-    for (const p of list) {
-      const s = still ? 0.5 : Math.max(0, Math.sin(t * p.sp * 6.283 + p.ph));
-      ctx.globalAlpha = (p.base + (p.peak - p.base) * s * s * s) * k;
-      ctx.fillRect(p.x, p.y, TW, TH);
+    // goal line
+    const gy = py(yv(goal));
+    ctx.setLineDash([5, 6]); ctx.lineWidth = 1; ctx.strokeStyle = `rgba(${hi},${lt ? 0.28 : 0.32})`;
+    ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x1, gy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    for (const L of live) {
+      const age = now - L.t0;
+      const prog = L.still ? 1 : ease(Math.min(age / DRAW_MS, 1));
+      const fade = L.still ? 0.55 : age < DRAW_MS + HOLD_MS ? 1 : Math.max(0, 1 - (age - DRAW_MS - HOLD_MS) / FADE_MS);
+      if (fade <= 0) continue;
+      const end = prog * years, n = Math.floor(end);
+      const a = (L.p.hit ? (lt ? 0.5 : 0.62) : (lt ? 0.26 : 0.3)) * fade;
+      ctx.strokeStyle = `rgba(${L.p.hit ? hi : base},${a})`;
+      ctx.lineWidth = L.p.hit ? 1.4 : 1.1;
+      ctx.beginPath(); ctx.moveTo(px(0), py(L.p.pts[0]));
+      for (let i = 1; i <= n; i++) ctx.lineTo(px(i), py(L.p.pts[i]));
+      let hx = px(n), hy = py(L.p.pts[n]);
+      if (n < years) {
+        const f = end - n, v = L.p.pts[n] + (L.p.pts[n + 1] - L.p.pts[n]) * f;
+        hx = px(n + f); hy = py(v); ctx.lineTo(hx, hy);
+      }
+      ctx.stroke();
+      if (!L.still && prog < 1) { // the "pen" at the tip while a path is being drawn
+        ctx.fillStyle = `rgba(${hi},${0.85 * fade})`;
+        ctx.beginPath(); ctx.arc(hx, hy, 2, 0, Math.PI * 2); ctx.fill();
+      }
     }
-    ctx.globalAlpha = 1;
   }
   function loop(now) {
     if (!run) return;
-    if (now - last > 41) { last = now; draw(now); }
+    if (now - lastSpawn > EVERY_MS) {
+      live.push({ p: paths[next], t0: now }); next = (next + 1) % POOL; lastSpawn = now;
+    }
+    while (live.length && now - live[0].t0 > DRAW_MS + HOLD_MS + FADE_MS) live.shift();
+    if (now - last > 33) { last = now; draw(now); }
     requestAnimationFrame(loop);
   }
   function go() {
@@ -378,6 +415,11 @@ const tiles = (() => {
   }
   function start() {
     size();
+    if (!still) { // start with a few paths already in flight so the hero is never empty
+      const now = performance.now();
+      for (let k = 0; k < 9; k++) { live.push({ p: paths[next], t0: now - (9 - k) * EVERY_MS }); next++; }
+      lastSpawn = now;
+    }
     let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(size, 150); });
     document.addEventListener('visibilitychange', go);
     new IntersectionObserver((e) => { vis = e[0].isIntersecting; go(); }).observe(cv);
