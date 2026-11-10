@@ -115,7 +115,7 @@ function render() {
 }
 
 function drawGauge(p) {
-  const r = 52, c = 2 * Math.PI * r, color = p >= 0.5 ? 'var(--hit)' : p >= 0.25 ? 'var(--goal)' : 'var(--bad)';
+  const r = 52, c = 2 * Math.PI * r, color = p >= 0.5 ? 'var(--hit)' : p >= 0.25 ? 'var(--acc)' : 'var(--bad)';
   $('gauge').innerHTML = `<svg viewBox="0 0 132 132"><circle cx="66" cy="66" r="${r}" fill="none" stroke="var(--s3)" stroke-width="12"/>
     <circle cx="66" cy="66" r="${r}" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${(c * p).toFixed(2)} ${c.toFixed(2)}" transform="rotate(-90 66 66)"/></svg>`;
 }
