@@ -4,6 +4,7 @@ from pathlib import Path
 
 md, code = nbf.v4.new_markdown_cell, nbf.v4.new_code_cell
 cells = [
+md('<a href="https://colab.research.google.com/github/ldiazbusquets/retirement-sim/blob/main/notebook/retirement_simulation.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>'),
 md("""# Retirement Simulation in Python (Mini Project 2 → Retirement Simulator app)
 
 FIN 414 Applied Project I · Group 6
