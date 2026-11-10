@@ -8,7 +8,7 @@ md("""# Retirement Simulation in Python (Mini Project 2 → Retirement Simulator
 
 FIN 414 Applied Project I · Group 6
 
-This notebook runs the **same simulation as our web app** ([live app](https://ldiazbusquets.github.io/retirement-sim/)) in Python, the way we did Mini Project 2 in Colab. It shows that the app keeps the mini project's logic:
+This notebook runs the **same simulation as our web app** ([live app](https://ldiazbusquets.github.io/retirement-sim/)) in Python, the way we did [Mini Project 2](https://colab.research.google.com/drive/1CneUfRILPvuPLPJIDTyWolI1Qd1K_K1Q?usp=sharing) in Colab. It shows that the app keeps the mini project's logic:
 
 1. the same S&P 500 data (^GSPC year-end closes, 1929–2023 → 94 annual returns),
 2. the same year-by-year formula: `balance = balance × (1 + return) + contribution`,
@@ -40,14 +40,16 @@ print(f"{len(returns)} annual returns, {returns.index[0]}-{returns.index[-1]}")
 print(f"Largest gap between recomputed and app returns: {abs(returns - returns_app).max():.1e}")
 print(f"Mean {returns_app.mean():.4%}   Std dev {returns_app.std():.4%}")
 print(f"Worst {returns_app.idxmin()} ({returns_app.min():.1%})   Best {returns_app.idxmax()} ({returns_app.max():.1%})")"""),
-md("""**Optional:** re-download the data exactly as in Mini Project 2 (needs internet and `yfinance`). Uncomment to check that the closes match.
+md("""**Optional:** re-download the data with the exact code from the professor's [Mini Project 2 notebook](https://colab.research.google.com/drive/1CneUfRILPvuPLPJIDTyWolI1Qd1K_K1Q?usp=sharing) (needs internet and `yfinance`). Uncomment to check that the returns match.
 
 The app's file was saved on Nov 9, 2026; Yahoo can occasionally revise old values slightly."""),
-code("""# !pip install -q yfinance
+code("""# Same code as the professor's Mini Project 2 notebook:
 # import yfinance as yf
-# px = yf.download('^GSPC', start='1929-01-01', end='2024-01-01', auto_adjust=False, progress=False)['Close'].squeeze()
-# yearly = px.resample('YE').last()
-# print(yearly.pct_change().dropna().describe())"""),
+# ticker_df = yf.Ticker('^GSPC').history(start="1929-01-01", end="2024-01-01", interval="1d")
+# sp500_annual_close = ticker_df["Close"].resample("YE").last().dropna()   # year-end
+# sp500_annual_ret = sp500_annual_close.pct_change().dropna()
+# print(len(sp500_annual_ret), sp500_annual_ret.mean(), sp500_annual_ret.std())
+# print("Largest gap vs. the app's returns:", abs(sp500_annual_ret.values - returns_app.values).max())"""),
 md("## 2. Emma's inputs (the app's defaults)"),
 code("""current_age    = 30
 retirement_age = 65
