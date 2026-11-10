@@ -33,7 +33,7 @@ html = must_sub(r'<link rel="icon" href="\./favicon\.svg"[^>]*>', f'<link rel="i
 html = must_sub(r'<link rel="stylesheet" href="\./styles\.css">', f"<style>\n{css}\n.install-btn {{ display: none !important; }}\n</style>", html)
 html = must_sub(r'<script src="\./sim\.js"></script>', f"<script>\n{sim}\n</script>", html)
 html = must_sub(r'<script src="\./app\.js"></script>', f"<script>\n{app}\n</script>", html)
-html = must_sub(r'(<p class="eyebrow">)', rf'\1Offline copy{" · build " + sha if sha else ""} · ', html)
+html = must_sub(r'<p class="eyebrow">', f'<p class="eyebrow">Offline copy{" · build " + sha if sha else ""} · ', html)
 
 out = ROOT / "dist" / "retirement-simulator-offline.html"
 out.parent.mkdir(exist_ok=True)
