@@ -438,5 +438,6 @@ addEventListener('resize', () => { clearTimeout(rzc); rzc = setTimeout(() => {
   lastNarrow = narrow;
 }, 150); });
 tiles.start();
-// Nothing runs until the user clicks Run simulation (design document, User interface).
+// Run once on open with the form's values (Emma's case, or the inputs in a shared link).
 liveCheck();
+if (!$('run-btn').disabled) run();
