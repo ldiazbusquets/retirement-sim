@@ -98,23 +98,24 @@
           <p class="msg" id="goal-msg" aria-live="polite"></p>
         </div>
 
+        <fieldset class="field toggle">
+          <legend>Contributions made</legend>
+          <div class="seg">
+            <label><input type="radio" name="timing" value="end"><span>End of year</span></label>
+            <label><input type="radio" name="timing" value="begin"><span>Start of year</span></label>
+          </div>
+        </fieldset>
+        <fieldset class="field toggle">
+          <legend>Return model</legend>
+          <div class="seg">
+            <label><input type="radio" name="model" value="normal"><span>Normal</span></label>
+            <label><input type="radio" name="model" value="historical"><span>Historical years</span></label>
+          </div>
+          <p class="help" id="model-help"></p>
+        </fieldset>
+
         <details class="advanced" id="advanced">
           <summary>Simulation settings</summary>
-          <div class="field">
-            <label for="model">Return model</label>
-            <select id="model" name="model" aria-describedby="model-help">
-              <option value="normal">Normal distribution (Mini Project 2)</option>
-              <option value="historical">Historical years, resampled</option>
-            </select>
-            <p class="help" id="model-help"></p>
-          </div>
-          <div class="field">
-            <label for="timing">Contributions made</label>
-            <select id="timing" name="timing">
-              <option value="end">End of each year (Mini Project 2)</option>
-              <option value="begin">Beginning of each year</option>
-            </select>
-          </div>
           <div class="row2">
             <div class="field">
               <label for="simulations">Simulations</label>
@@ -136,6 +137,13 @@
       <!-- ============ results ============ -->
       <section class="results" id="results" aria-labelledby="results-h" aria-busy="false">
         <h2 class="sr-only" id="results-h">Results</h2>
+        <div class="glass panel empty" id="empty">
+          <p class="kicker">Ready when you are</p>
+          <p class="empty-title">Check your plan on the left, then click <strong>Run simulation</strong>.</p>
+          <p class="sub">The form starts with Emma's case from Mini Project 2: age 30, $12,000 a year, a $1.5M goal at 65. Change any number to make it yours.</p>
+        </div>
+        <p class="banner" id="banner" role="status" hidden></p>
+        <div class="out" id="out" hidden>
         <div class="glass panel headline">
           <div class="gauge" id="gauge" aria-hidden="true"></div>
           <div>
@@ -175,6 +183,7 @@
           </div>
           <div class="table-wrap"><table class="ptable" id="ptable"></table></div>
           <p class="sub" id="pin-note"></p>
+        </div>
         </div>
       </section>
     </div>

@@ -36,13 +36,13 @@ function fillSelect() {
 }
 function setForm(v) {
   for (const k of FIELDS) {
-    const el = $(k);
+    const el = $('form').elements[k];
     el.value = MONEY.includes(k) && v[k] !== '' && Number.isFinite(Number(v[k])) ? Number(v[k]).toLocaleString('en-US') : v[k];
   }
 }
 function readForm() {
   const raw = {};
-  for (const k of FIELDS) raw[k] = $(k).value;
+  for (const k of FIELDS) raw[k] = $('form').elements[k].value;
   return raw;
 }
 function fromURL() {
@@ -60,11 +60,11 @@ function showMessages(check) {
   for (const k of FIELDS) {
     const el = $(k), m = $(`${k}-msg`);
     const err = check.errors[k], note = check.notes[k];
-    el.setAttribute('aria-invalid', err ? 'true' : 'false');
+    if (el) el.setAttribute('aria-invalid', err ? 'true' : 'false');
     if (m) { m.textContent = err || note || ''; m.classList.toggle('note', !err && !!note); }
   }
   // Errors in hidden settings: open the panel so the message can be seen.
-  if (['simulations', 'timing', 'model', 'seed'].some((k) => check.errors[k])) $('advanced').open = true;
+  if (['simulations', 'seed'].some((k) => check.errors[k])) $('advanced').open = true;
 }
 
 /* ---------------- running ---------------- */
@@ -81,16 +81,47 @@ function run() {
   $('results').setAttribute('aria-busy', 'true');
   // Let the button repaint before the (synchronous) simulation runs.
   setTimeout(() => {
-    const t = performance.now();
-    const result = S.simulate(v);
-    const bands = S.bands(result, [5, 25, 50, 75, 95]);
-    current = { v, result, bands, ms: performance.now() - t };
-    render();
-    toURL(v);
-    $('stale').hidden = true;
-    $('run-btn').disabled = false; $('run-btn').textContent = 'Run simulation';
-    $('results').setAttribute('aria-busy', 'false');
+    try {
+      const t = performance.now();
+      const result = S.simulate(v);
+      const bands = S.bands(result, [5, 25, 50, 75, 95]);
+      current = { v, result, bands, ms: performance.now() - t };
+      $('empty').hidden = true; $('out').hidden = false;
+      render();
+      toURL(v);
+      setStale(false);
+    } catch (err) {
+      console.error(err);
+      setBanner('Something went wrong; your inputs were kept. Please try again.', true);
+    } finally {
+      $('run-btn').disabled = false; $('run-btn').textContent = 'Run simulation';
+      $('results').setAttribute('aria-busy', 'false');
+    }
   }, 30);
+}
+
+function setBanner(text, isError) {
+  $('banner').textContent = text || '';
+  $('banner').hidden = !text;
+  $('banner').classList.toggle('err', !!isError);
+}
+/* Old results stay visible after an input changes, but are marked out of date until the next run. */
+function setStale(on) {
+  $('stale').hidden = !on;
+  $('results').classList.toggle('is-stale', on);
+  setBanner(on ? 'Out of date: your inputs changed. Click Run simulation to update these results.' : '');
+}
+/* Check fields as the user types; an invalid value shows its message and disables Run. */
+function liveCheck(e) {
+  const check = S.validate(readForm());
+  // Show messages only for fields the user has touched, so one edit doesn't flag the whole form.
+  if (e && e.target && e.target.name) touched.add(e.target.name);
+  if (e && e.target && e.target.name === 'currentAge') touched.add('retirementAge');
+  const shown = { errors: {}, notes: {} };
+  for (const k of touched) { if (check.errors[k]) shown.errors[k] = check.errors[k]; if (check.notes[k]) shown.notes[k] = check.notes[k]; }
+  showMessages(shown);
+  $('run-btn').disabled = !check.ok;
+  if (current) setStale(true);
 }
 
 /* ---------------- render ---------------- */
@@ -104,7 +135,7 @@ function render() {
   const gap = st.median - v.goal;
   const stats = [
     ['Median outcome', fmtShort(st.median), gap >= 0 ? `${fmtShort(gap)} above goal` : `${fmtShort(-gap)} below goal`],
-    ['Average outcome', fmtShort(st.mean), 'pulled up by the best cases'],
+    ['Average outcome', fmtShort(st.mean), st.mean > st.median * 1.02 ? 'pulled up by the best cases' : 'close to the median'],
     ['Bad case (5th pct.)', fmtShort(st.p5), '1 in 20 ends below this'],
     ['Good case (95th pct.)', fmtShort(st.p95), '1 in 20 ends above this'],
     ['You put in', fmtShort(st.contributed), `over ${years} year${years === 1 ? '' : 's'}`],
@@ -379,14 +410,15 @@ const R = S.RETURNS, worst = R.indexOf(Math.min(...R)), best = R.indexOf(Math.ma
 $('data-facts').textContent = `Average ${(S.MEAN * 100).toFixed(2)}% a year · standard deviation ${(S.SD * 100).toFixed(2)}% · worst ${S.FIRST_YEAR + worst} (${(R[worst] * 100).toFixed(1)}%) · best ${S.FIRST_YEAR + best} (+${(R[best] * 100).toFixed(1)}%) · ${R.filter((r) => r < 0).length} down years of ${R.length}.`;
 
 $('form').addEventListener('submit', (e) => { e.preventDefault(); run(); });
-$('form').addEventListener('input', () => { if (current) $('stale').hidden = false; });
-$('form').addEventListener('change', () => { if (current) $('stale').hidden = false; });
+const touched = new Set();
+$('form').addEventListener('input', liveCheck);
+$('form').addEventListener('change', liveCheck);
 for (const k of MONEY) $(k).addEventListener('blur', () => {
   const x = Number($(k).value.replace(/[$,\s]/g, ''));
   if ($(k).value.trim() !== '' && Number.isFinite(x)) $(k).value = x.toLocaleString('en-US');
 });
-$('reset-btn').addEventListener('click', () => { setForm(S.DEFAULTS); run(); });
-$('new-seed').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 1e6); $('stale').hidden = !current; });
+$('reset-btn').addEventListener('click', () => { setForm(S.DEFAULTS); touched.clear(); liveCheck(); });
+$('new-seed').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 1e6); liveCheck(); });
 $('pin-btn').addEventListener('click', () => { if (current) { pinned = { v: current.v, stats: current.result.stats }; drawTable(); } });
 $('csv-btn').addEventListener('click', downloadCSV);
 syncThemeButton();
@@ -397,4 +429,5 @@ addEventListener('resize', () => { clearTimeout(rzc); rzc = setTimeout(() => {
   lastNarrow = narrow;
 }, 150); });
 tiles.start();
-run();
+// Nothing runs until the user clicks Run simulation (design document, User interface).
+liveCheck();
