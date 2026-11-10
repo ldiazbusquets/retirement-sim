@@ -141,6 +141,19 @@
             </div>
           </div>
           <p class="help" id="seed-help">The same seed and inputs always give the same results. <button class="link-btn" type="button" id="new-seed">New seed</button></p>
+          <div class="row2 returns">
+            <div class="field">
+              <label for="meanReturn">Expected return (%)</label>
+              <input id="meanReturn" name="meanReturn" inputmode="decimal" autocomplete="off" aria-describedby="meanReturn-msg returns-help">
+              <p class="msg" id="meanReturn-msg" aria-live="polite"></p>
+            </div>
+            <div class="field">
+              <label for="volatility">Volatility (%)</label>
+              <input id="volatility" name="volatility" inputmode="decimal" autocomplete="off" aria-describedby="volatility-msg returns-help">
+              <p class="msg" id="volatility-msg" aria-live="polite"></p>
+            </div>
+          </div>
+          <p class="help" id="returns-help"></p>
         </details>
 
         <button class="run-btn" type="submit" id="run-btn">Run simulation</button>
@@ -167,6 +180,18 @@
         </div>
 
         <div class="stats" id="stats"></div>
+
+        <div class="glass panel take" id="take">
+          <div class="panel-head">
+            <h3>What would it take?</h3>
+            <div class="seg seg-sm" role="radiogroup" aria-label="Target chance of reaching the goal">
+              <label><input type="radio" name="target" value="0.75" checked><span>75% chance</span></label>
+              <label><input type="radio" name="target" value="0.9"><span>90% chance</span></label>
+            </div>
+          </div>
+          <div class="take-grid" id="take-body" aria-live="polite"></div>
+          <p class="sub">Worked out on the same simulated markets as your result, so trying a suggestion gives at least that chance.</p>
+        </div>
 
         <div class="glass panel chart-panel">
           <div class="panel-head">

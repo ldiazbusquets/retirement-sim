@@ -32,11 +32,12 @@ def rng(seed):
     return nxt
 
 
-def simulate(current_age, retirement_age, contribution, start_balance, sims, timing, model, seed):
+def simulate(current_age, retirement_age, contribution, start_balance, sims, timing, model, seed, mean=None, sd=None):
     R = returns()
     n = len(R)
-    mean = sum(R) / n
-    sd = math.sqrt(sum((r - mean) ** 2 for r in R) / (n - 1))
+    hist_mean = sum(R) / n
+    mean = hist_mean if mean is None else mean
+    sd = math.sqrt(sum((r - hist_mean) ** 2 for r in R) / (n - 1)) if sd is None else sd
     rand = rng(seed)
     out = []
     for _ in range(sims):

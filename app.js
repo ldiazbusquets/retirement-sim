@@ -12,9 +12,9 @@ if (!$('empty') || !$('banner') || !document.querySelector('input[name="timing"]
   throw new Error('Page and script versions differ; reloading.');
 }
 try { sessionStorage.removeItem('retsim-reloaded'); } catch (e) { /* storage blocked */ }
-const FIELDS = ['currentAge', 'retirementAge', 'contribution', 'startBalance', 'goal', 'simulations', 'timing', 'model', 'seed'];
+const FIELDS = ['currentAge', 'retirementAge', 'contribution', 'startBalance', 'goal', 'simulations', 'timing', 'model', 'seed', 'meanReturn', 'volatility'];
 const MONEY = ['contribution', 'startBalance', 'goal'];
-const URL_KEYS = { currentAge: 'age', retirementAge: 'retire', contribution: 'save', startBalance: 'have', goal: 'goal', simulations: 'n', timing: 'timing', model: 'model', seed: 'seed' };
+const URL_KEYS = { currentAge: 'age', retirementAge: 'retire', contribution: 'save', startBalance: 'have', goal: 'goal', simulations: 'n', timing: 'timing', model: 'model', seed: 'seed', meanReturn: 'ret', volatility: 'vol' };
 const SVGNS = 'http://www.w3.org/2000/svg';
 
 let current = null;   // { v, result, bands, at }
@@ -39,11 +39,20 @@ const fmtAxis = (x) => fmtShort(x).replace(/\.0+(?=[KMB])/, '').replace(/(\.\d*?
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 /* ---------------- form ---------------- */
+function syncReturns() {
+  const hist = $('form').elements.model.value === 'historical';
+  $('meanReturn').disabled = hist; $('volatility').disabled = hist;
+  $('returns-help').textContent = hist
+    ? 'The historical model uses the 94 real years as they happened, so these only apply to the normal model.'
+    : `Historical figures are ${HIST_RET}% and ${HIST_VOL}%. Try a lower return to see what a weaker future market would mean.`;
+}
 function fillSelect() {
   $('simulations').innerHTML = S.SIM_OPTIONS.map((n) => `<option value="${n}">${n.toLocaleString('en-US')}</option>`).join('');
   $('model-help').textContent = `Normal: average ${(S.MEAN * 100).toFixed(2)}% a year, standard deviation ${(S.SD * 100).toFixed(2)}%, the figures from ${S.FIRST_YEAR}–${S.FIRST_YEAR + S.RETURNS.length - 1}. Historical: real years such as 2008 (−38.5%) can repeat, which gives fatter tails.`;
 }
+const HIST_RET = (S.MEAN * 100).toFixed(2), HIST_VOL = (S.SD * 100).toFixed(2);
 function setForm(v) {
+  v = { meanReturn: HIST_RET, volatility: HIST_VOL, ...v };
   for (const k of FIELDS) {
     const el = $('form').elements[k];
     el.value = MONEY.includes(k) && v[k] !== '' && Number.isFinite(Number(v[k])) ? Number(v[k]).toLocaleString('en-US') : v[k];
@@ -62,7 +71,12 @@ function fromURL() {
 }
 function toURL(v) {
   const q = new URLSearchParams();
-  for (const [k, p] of Object.entries(URL_KEYS)) q.set(p, v[k]);
+  for (const [k, p] of Object.entries(URL_KEYS)) {
+    if (k === 'meanReturn' || k === 'volatility') {
+      const exact = k === 'meanReturn' ? S.MEAN : S.SD;
+      if (v[k] !== exact) q.set(p, +(v[k] * 100).toFixed(4));   // only custom return assumptions go in the link
+    } else q.set(p, v[k]);
+  }
   try { history.replaceState(null, '', `${location.pathname}?${q}${location.hash}`); } catch (e) { /* some browsers block this for local files */ }
 }
 function showMessages(check) {
@@ -73,7 +87,7 @@ function showMessages(check) {
     if (m) { m.textContent = err || note || ''; m.classList.toggle('note', !err && !!note); }
   }
   // Errors in hidden settings: open the panel so the message can be seen.
-  if (['simulations', 'seed'].some((k) => check.errors[k])) $('advanced').open = true;
+  if (['simulations', 'seed', 'meanReturn', 'volatility'].some((k) => check.errors[k])) $('advanced').open = true;
 }
 
 /* ---------------- running ---------------- */
@@ -150,9 +164,51 @@ function render() {
     ['You put in', fmtShort(st.contributed), `over ${years} year${years === 1 ? '' : 's'}`],
   ];
   $('stats').innerHTML = stats.map(([k, val, d]) => `<div class="glass stat"><p class="k">${k}</p><p class="v">${val}</p><p class="d">${d}</p></div>`).join('');
-  $('hist-sub').textContent = `Final balance at age ${v.retirementAge} in each of the ${v.simulations.toLocaleString('en-US')} simulations (${v.model === 'normal' ? 'normal model' : 'historical years'}, ${v.timing === 'end' ? 'end-of-year' : 'start-of-year'} contributions, seed ${v.seed}). Ran in ${Math.max(1, Math.round(current.ms))} ms.`;
-  drawHistogram(); drawFan(); drawTable();
+  $('hist-sub').textContent = `Final balance at age ${v.retirementAge} in each of the ${v.simulations.toLocaleString('en-US')} simulations (${modelText(v)}, ${v.timing === 'end' ? 'end-of-year' : 'start-of-year'} contributions, seed ${v.seed}). Ran in ${Math.max(1, Math.round(current.ms))} ms.`;
+  drawHistogram(); drawFan(); drawTable(); drawTake();
 }
+
+/* ---------------- what would it take? ---------------- */
+const takeCache = new Map();
+function drawTake() {
+  const { v, result } = current, p = result.stats.probability;
+  const target = Number(document.querySelector('input[name="target"]:checked').value);
+  const pct = `${Math.round(target * 100)}%`, body = $('take-body');
+  if (p >= target) {
+    body.innerHTML = `<p class="take-done">Your plan already has a ${fmtPct(p)} chance, at or above ${pct}. Nothing to change.</p>`;
+    return;
+  }
+  const key = `${JSON.stringify(v)}|${target}`;
+  const show = ({ C, ret }) => {
+    const c = Math.ceil(C / 100) * 100, canC = Number.isFinite(c) && c <= S.LIMITS.contribution[1];
+    const cardC = canC
+      ? `<div class="take-card"><p class="k">Save each year</p><p class="v">${fmtUSD(c)}</p><p class="d">instead of ${fmtUSD(v.contribution)} (${c > v.contribution ? '+' : ''}${fmtUSD(c - v.contribution)}), retiring at ${v.retirementAge}</p><button class="ghost-btn" type="button" data-try="contribution" data-val="${c}">Try it</button></div>`
+      : `<div class="take-card"><p class="k">Save each year</p><p class="v">Over $1M</p><p class="d">No contribution up to $1,000,000 a year reaches ${pct} by age ${v.retirementAge}.</p></div>`;
+    const cardR = ret
+      ? `<div class="take-card"><p class="k">Or retire at</p><p class="v">Age ${ret.age}</p><p class="d">instead of ${v.retirementAge}, still saving ${fmtUSD(v.contribution)} a year (${fmtPct(ret.probability)} chance)</p><button class="ghost-btn" type="button" data-try="retirementAge" data-val="${ret.age}">Try it</button></div>`
+      : `<div class="take-card"><p class="k">Or retire at</p><p class="v">Not by 80</p><p class="d">Saving ${fmtUSD(v.contribution)} a year doesn't reach ${pct} even retiring at 80.</p></div>`;
+    body.innerHTML = cardC + cardR;
+  };
+  if (takeCache.has(key)) { show(takeCache.get(key)); return; }
+  body.innerHTML = '<p class="take-done sub">Working it out…</p>';
+  setTimeout(() => {   // after the main result has painted
+    if (!current || current.v !== v) return;
+    try {
+      const out = { C: S.requiredContribution(v, target), ret: S.requiredRetirementAge(v, target) };
+      takeCache.set(key, out);
+      if (current && current.v === v && Number(document.querySelector('input[name="target"]:checked').value) === target) show(out);
+    } catch (e) { body.innerHTML = '<p class="take-done sub">Could not work this out for these inputs.</p>'; }
+  }, 60);
+}
+document.querySelectorAll('input[name="target"]').forEach((r) => r.addEventListener('change', (e) => { e.stopPropagation(); if (current) drawTake(); }));
+$('take-body').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-try]');
+  if (!b) return;
+  const k = b.dataset.try, val = Number(b.dataset.val);
+  $(k).value = MONEY.includes(k) ? val.toLocaleString('en-US') : val;
+  run();
+  $('results').scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+});
 
 function drawGauge(p) {
   const r = 52, c = 2 * Math.PI * r, color = p >= 0.5 ? 'var(--hit)' : p >= 0.25 ? 'var(--mid)' : 'var(--bad)';
@@ -293,8 +349,13 @@ function drawTable() {
   $('pin-note').textContent = A ? `Scenario A: ${describe(pinned.v)}.` : 'Save these results as scenario A, change an input and run again to compare side by side. A copied link opens these exact results for anyone.';
   $('pin-btn').textContent = A ? 'Replace scenario A' : 'Save as scenario A';
 }
+const isCustom = (v) => v.model === 'normal' && (v.meanReturn !== S.MEAN || v.volatility !== S.SD);
+function modelText(v) {
+  if (v.model !== 'normal') return 'historical years';
+  return isCustom(v) ? `normal model, ${(v.meanReturn * 100).toFixed(2)}% return / ${(v.volatility * 100).toFixed(2)}% volatility (custom)` : 'normal model';
+}
 function describe(v) {
-  return `age ${v.currentAge} to ${v.retirementAge}, ${fmtUSD(v.contribution)}/yr, starting ${fmtUSD(v.startBalance)}, goal ${fmtUSD(v.goal)}, ${v.model === 'normal' ? 'normal model' : 'historical years'}, ${v.timing === 'end' ? 'end' : 'start'}-of-year, ${v.simulations.toLocaleString('en-US')} sims, seed ${v.seed}`;
+  return `age ${v.currentAge} to ${v.retirementAge}, ${fmtUSD(v.contribution)}/yr, starting ${fmtUSD(v.startBalance)}, goal ${fmtUSD(v.goal)}, ${modelText(v)}, ${v.timing === 'end' ? 'end' : 'start'}-of-year, ${v.simulations.toLocaleString('en-US')} sims, seed ${v.seed}`;
 }
 
 function downloadCSV() {
@@ -490,6 +551,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
 /* ---------------- wire up ---------------- */
 fillSelect();
 setForm(fromURL());
+syncReturns();
 const R = S.RETURNS, worst = R.indexOf(Math.min(...R)), best = R.indexOf(Math.max(...R));
 $('data-facts').textContent = `Average ${(S.MEAN * 100).toFixed(2)}% a year · standard deviation ${(S.SD * 100).toFixed(2)}% · worst ${S.FIRST_YEAR + worst} (${(R[worst] * 100).toFixed(1)}%) · best ${S.FIRST_YEAR + best} (+${(R[best] * 100).toFixed(1)}%) · ${R.filter((r) => r < 0).length} down years of ${R.length}.`;
 
@@ -497,11 +559,12 @@ $('form').addEventListener('submit', (e) => { e.preventDefault(); run(); });
 const touched = new Set();
 $('form').addEventListener('input', liveCheck);
 $('form').addEventListener('change', liveCheck);
+$('form').addEventListener('change', (e) => { if (e.target.name === 'model') syncReturns(); });
 for (const k of MONEY) $(k).addEventListener('blur', () => {
   const x = Number($(k).value.replace(/[$,\s]/g, ''));
   if ($(k).value.trim() !== '' && Number.isFinite(x)) $(k).value = x.toLocaleString('en-US');
 });
-$('reset-btn').addEventListener('click', () => { setForm(S.DEFAULTS); touched.clear(); liveCheck(); });
+$('reset-btn').addEventListener('click', () => { setForm(S.DEFAULTS); syncReturns(); touched.clear(); liveCheck(); });
 $('new-seed').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 1e6); liveCheck(); });
 $('pin-btn').addEventListener('click', () => { if (current) { pinned = { v: current.v, stats: current.result.stats }; drawTable(); } });
 $('csv-btn').addEventListener('click', downloadCSV);

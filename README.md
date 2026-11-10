@@ -10,6 +10,8 @@ Enter your current age, retirement age, yearly contribution, current savings and
 - the mean, median, and 5th / 25th / 75th / 95th percentile final balances
 - a histogram of final balances with the goal marked, and a growth chart by age
 - a side-by-side comparison with a saved scenario, and a CSV download of every simulated outcome
+- **What would it take?** the smallest yearly saving, or the earliest retirement age, that gives a 75% or 90% chance of reaching the goal, worked out on the same simulated markets
+- optional custom return assumptions (expected return and volatility) for the normal model, to test a weaker or stronger future market
 
 Default inputs are the Mini Project 2 case (Emma: age 30, $12,000 a year at the start of each year, $1.5M goal at 65, 10,000 simulations).
 

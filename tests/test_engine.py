@@ -113,6 +113,70 @@ class Finance(unittest.TestCase):
         self.assertGreater(s["mean"], s["median"])  # wealth is right-skewed
 
 
+class CustomReturns(unittest.TestCase):
+    """Optional expected return and volatility for the normal model."""
+
+    def test_historical_figures_as_shown_mean_the_exact_values(self):
+        v = js(f"S.validate({json.dumps({**DEFAULTS, 'meanReturn': '7.74', 'volatility': '18.91'})}).values")
+        m, sd = js("[S.MEAN,S.SD]")
+        self.assertEqual((v["meanReturn"], v["volatility"]), (m, sd))
+        self.assertEqual(run_js(meanReturn="7.74", volatility="18.91")["stats"], run_js()["stats"])
+
+    def test_zero_return_zero_volatility_is_hand_calculation(self):
+        s = run_js(meanReturn="0", volatility="0", simulations=1000)["stats"]
+        self.assertEqual((s["min"], s["max"]), (420000, 420000))
+
+    def test_constant_return_matches_annuity(self):
+        s = run_js(meanReturn="7", volatility="0", simulations=1000, timing="begin")["stats"]
+        self.assertAlmostEqual(s["mean"], 12000 * ((1.07 ** 35 - 1) / 0.07) * 1.07, delta=1e-4)
+
+    def test_parity_with_python(self):
+        v = {**DEFAULTS, "simulations": 1000, "seed": 99, "meanReturn": "5", "volatility": "15"}
+        got = run_js(**v)["outcomes"]
+        want = simulate(30, 65, 12000, 0, 1000, "end", "normal", 99, mean=0.05, sd=0.15)
+        for a, b in zip(got, want):
+            self.assertAlmostEqual(a, b, delta=max(1e-6, abs(b) * 1e-12))
+
+    def test_lower_return_lowers_probability(self):
+        self.assertLess(run_js(meanReturn="5")["stats"]["probability"], run_js()["stats"]["probability"])
+
+    def test_validation(self):
+        err = lambda **o: js(f"S.validate({json.dumps({**DEFAULTS, **o})}).errors")
+        self.assertIn("meanReturn", err(meanReturn="31"))
+        self.assertIn("meanReturn", err(meanReturn="abc"))
+        self.assertIn("volatility", err(volatility="-1"))
+        self.assertEqual(err(meanReturn="", volatility=""), {})
+
+
+class WhatWouldItTake(unittest.TestCase):
+    """requiredContribution / requiredRetirementAge give the smallest change that reaches the target."""
+
+    def prob(self, **over):
+        return run_js(**over)["stats"]["probability"]
+
+    def test_contribution_is_the_smallest_that_works(self):
+        for target in (0.75, 0.9):
+            c = js(f"S.requiredContribution(S.validate({json.dumps(DEFAULTS)}).values,{target})")
+            self.assertGreaterEqual(self.prob(contribution=c), target)
+            self.assertLess(self.prob(contribution=c * 0.999), target)
+            self.assertGreaterEqual(self.prob(contribution=math.ceil(c / 100) * 100), target)
+
+    def test_contribution_with_starting_balance_and_end_timing(self):
+        base = {**DEFAULTS, "startBalance": 50000, "timing": "end", "simulations": 5000}
+        c = js(f"S.requiredContribution(S.validate({json.dumps(base)}).values,0.8)")
+        self.assertGreaterEqual(self.prob(**{**base, "contribution": c}), 0.8)
+        self.assertLess(self.prob(**{**base, "contribution": c * 0.999}), 0.8)
+
+    def test_retirement_age_is_the_earliest_that_works(self):
+        r = js(f"S.requiredRetirementAge(S.validate({json.dumps(DEFAULTS)}).values,0.75)")
+        self.assertGreaterEqual(r["probability"], 0.75)
+        self.assertAlmostEqual(self.prob(retirementAge=r["age"]), r["probability"])
+        self.assertLess(self.prob(retirementAge=r["age"] - 1), 0.75)
+
+    def test_retirement_age_none_when_unreachable(self):
+        self.assertIsNone(js(f"S.requiredRetirementAge(S.validate({json.dumps({**DEFAULTS, 'contribution': 1000})}).values,0.9)"))
+
+
 class Validation(unittest.TestCase):
     def errors(self, **over):
         return js(f"S.validate({json.dumps({**DEFAULTS, **over})}).errors")

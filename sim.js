@@ -18,6 +18,7 @@
   const LIMITS = {
     currentAge: [18, 79], retirementAge: [19, 80], contribution: [0, 1e6],
     startBalance: [0, 1e8], goal: [1, 1e9],
+    meanReturn: [-20, 30], volatility: [0, 80],   // percent a year, normal model only
   };
   const SIM_OPTIONS = [1000, 5000, 10000, 25000, 50000];
   const DEFAULTS = {
@@ -80,6 +81,16 @@
     const seed = Number(String(raw.seed ?? '').trim());
     if (String(raw.seed ?? '').trim() === '' || !Number.isInteger(seed) || seed < 0 || seed > 4294967295) errors.seed = 'Seed must be a whole number from 0 to 4,294,967,295.';
     v.seed = seed;
+    // Optional return assumptions for the normal model, typed in percent. Blank, or the
+    // historical figure as shown (7.74 / 18.91), means the exact historical value.
+    for (const [key, exact, label] of [['meanReturn', MEAN, 'Expected return'], ['volatility', SD, 'Volatility']]) {
+      const str = String(raw[key] ?? '').replace(/[%\s]/g, '');
+      if (str === '' || Number(str) === Number((exact * 100).toFixed(2))) { v[key] = exact; continue; }
+      const x = Number(str), [lo, hi] = LIMITS[key];
+      if (!Number.isFinite(x)) errors[key] = 'Enter a number.';
+      else if (x < lo || x > hi) errors[key] = `${label} must be between ${lo}% and ${hi}%.`;
+      v[key] = x / 100;
+    }
     if (!Object.keys(errors).length && v.contribution === 0 && v.startBalance === 0) {
       notes.contribution = 'With no contribution and no starting balance, wealth stays at $0.';
     }
@@ -107,6 +118,7 @@
     const fixed = opts && typeof opts.fixedReturn === 'number' ? opts.fixedReturn : null;
     const years = v.retirementAge - v.currentAge;
     const sims = v.simulations, rand = rng(v.seed);
+    const mu = v.meanReturn ?? MEAN, sd = v.volatility ?? SD;
     const outcomes = new Float64Array(sims);
     const paths = keepPaths ? new Float64Array(sims * (years + 1)) : null;
     let floored = 0;
@@ -119,7 +131,7 @@
           r = fixed;
         } else if (v.model === 'normal') {
           const u1 = 1 - rand(), u2 = rand();
-          r = MEAN + SD * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          r = mu + sd * Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
           if (r < -1) { r = -1; floored++; }
         } else {
           r = RETURNS[Math.floor(rand() * n)];
@@ -167,13 +179,37 @@
 
   /** Expected (average) final wealth implied by the formula, for the normal model. */
   function expectedWealth(v) {
-    const g = 1 + MEAN, T = v.retirementAge - v.currentAge;
-    const annuity = MEAN === 0 ? T : (g ** T - 1) / MEAN;
+    const m = v.meanReturn ?? MEAN, g = 1 + m, T = v.retirementAge - v.currentAge;
+    const annuity = m === 0 ? T : (g ** T - 1) / m;
     const contrib = v.timing === 'begin' ? v.contribution * annuity * g : v.contribution * annuity;
     return v.startBalance * g ** T + contrib;
   }
 
-  const api = { RETURNS, FIRST_YEAR, MEAN, SD, LIMITS, SIM_OPTIONS, DEFAULTS, rng, validate, simulate, summarize, percentile, bands, histogram, expectedWealth };
+  /**
+   * "What would it take?": the smallest yearly contribution that gives at least `target`
+   * chance of reaching the goal, on the same simulated markets (same seed) as v.
+   * Final wealth is linear in the contribution for a fixed set of returns, W = A + C x B,
+   * where A is the result with C = 0 and B the result of $1 a year from $0. Each simulation
+   * therefore needs C = (goal - A) / B, and the answer is the target-th smallest of those.
+   */
+  function requiredContribution(v, target) {
+    const A = simulate({ ...v, contribution: 0 }, { keepPaths: false }).outcomes;
+    const B = simulate({ ...v, startBalance: 0, contribution: 1 }, { keepPaths: false }).outcomes;
+    const need = Array.from(A, (a, s) => (a >= v.goal ? 0 : B[s] > 0 ? (v.goal - a) / B[s] : Infinity)).sort((x, y) => x - y);
+    // A hair above the exact boundary so floating-point rounding can't leave that path just short.
+    return need[Math.max(0, Math.ceil(target * need.length) - 1)] * (1 + 1e-9);
+  }
+
+  /** The earliest retirement age (up to 80) that gives at least `target` chance, or null. */
+  function requiredRetirementAge(v, target) {
+    for (let age = v.retirementAge + 1; age <= LIMITS.retirementAge[1]; age++) {
+      const p = simulate({ ...v, retirementAge: age }, { keepPaths: false }).stats.probability;
+      if (p >= target) return { age, probability: p };
+    }
+    return null;
+  }
+
+  const api = { RETURNS, FIRST_YEAR, MEAN, SD, LIMITS, SIM_OPTIONS, DEFAULTS, rng, validate, simulate, summarize, percentile, bands, histogram, expectedWealth, requiredContribution, requiredRetirementAge };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.RetirementSim = api;
 })(typeof window !== 'undefined' ? window : globalThis);
