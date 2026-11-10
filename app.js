@@ -335,75 +335,111 @@ document.addEventListener('pointermove', (e) => {
   g.style.setProperty('--my', `${e.clientY - r.top}px`);
 }, { passive: true });
 
-/* Hero animation: real simulated savings paths. Each line is one of Emma's simulated futures
-   from the engine below (age 30 to 65), drawn left to right like a simulation running, then
-   fading out while new ones start. Lines that end above the goal are drawn brighter; the
-   dashed line is the goal. Paused off screen, in hidden tabs and for reduced motion. */
+/* Hero animation: a live fan chart of Emma's simulated savings (age 30 to 65), from the
+   app's own engine. The shaded bands are the middle 50% and 90% of 400 simulations and
+   the solid line is the median; individual simulated paths draw across it one after
+   another and fade out. Paths ending above the goal (dashed line) are drawn darker.
+   Paused off screen, in hidden tabs and for reduced motion. */
 const tiles = (() => {
   const cv = $('hero-tiles'), ctx = cv.getContext('2d');
   const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const POOL = 160, DRAW_MS = 3200, HOLD_MS = 2600, FADE_MS = 3600, EVERY_MS = 520;
+  const POOL = 400, DRAW_MS = 3400, HOLD_MS = 1800, FADE_MS = 2600, EVERY_MS = 900, INTRO_MS = 1600;
   const sim = S.simulate({ ...S.DEFAULTS, simulations: POOL, seed: 414 });
-  const years = sim.years, goal = S.DEFAULTS.goal;
-  const finals = Array.from(sim.outcomes).sort((a, b) => a - b);
-  const top = finals[Math.floor(POOL * 0.96)];
-  // Square-root scale keeps both the slow early years and the wide late spread visible.
-  const yv = (w) => Math.sqrt(Math.max(w, 0) / top);
+  const years = sim.years, goal = S.DEFAULTS.goal, age0 = S.DEFAULTS.currentAge;
+  const band = S.bands(sim, [5, 25, 50, 75, 95]);
+  const top = band[years][4] * 1.04;
+  const yv = (w) => Math.sqrt(Math.max(w, 0) / top);   // square root keeps early years and late spread both visible
   const paths = Array.from({ length: POOL }, (_, s) => {
     const pts = [];
     for (let y = 0; y <= years; y++) pts.push(yv(sim.paths[s * (years + 1) + y]));
     return { pts, hit: sim.outcomes[s] >= goal };
-  });
-  let W = 0, H = 0, x0 = 0, x1 = 0, yTop = 0, yBot = 0, run = false, vis = true, last = 0, lastSpawn = -1e9, next = 0;
+  }).filter((p) => p.pts[years] < 1.02);            // skip the extreme top paths that would leave the frame
+  let narrow = false, W = 0, H = 0, x0 = 0, x1 = 0, yTop = 0, yBot = 0, run = false, vis = true, last = 0, lastSpawn = -1e9, next = 0, t0 = 0;
   const live = [];
   function size() {
     const r = cv.getBoundingClientRect(), dpr = Math.min(devicePixelRatio || 1, 2);
     W = r.width; H = r.height; cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const narrow = W < 700;
-    x0 = narrow ? W * 0.04 : Math.max(W * 0.5, 720); x1 = W * 0.985; yTop = H * 0.1; yBot = H * 0.92;
-    if (still) { live.length = 0; for (let i = 0; i < 48; i++) live.push({ p: paths[i], t0: -1e9, still: true }); }
+    narrow = W < 1000;
+    // line the chart up with the page's content column (max 1240px), right half
+    const inner = document.querySelector('.hero-inner').getBoundingClientRect(), pad = parseFloat(getComputedStyle(document.querySelector('.hero-inner')).paddingRight) || 0;
+    const cl = inner.left - r.left + pad, cr = inner.right - r.left - pad;
+    x0 = narrow ? W * 0.06 : Math.max(cl + (cr - cl) * 0.55, 700); x1 = narrow ? W - 20 : cr - 84;
+    yTop = H * 0.16; yBot = H - (narrow ? 26 : 44);
     draw(performance.now());
   }
   const px = (i) => x0 + (x1 - x0) * (i / years);
-  const py = (v) => yBot - (yBot - yTop) * Math.min(v, 1.08);
+  const py = (v) => yBot - (yBot - yTop) * Math.min(v, 1.04);
   const ease = (t) => 1 - (1 - t) ** 3;
+  function line(vals, upto) {
+    const n = Math.floor(upto);
+    ctx.moveTo(px(0), py(vals(0)));
+    for (let i = 1; i <= n; i++) ctx.lineTo(px(i), py(vals(i)));
+    if (n < years && upto > n) ctx.lineTo(px(upto), py(vals(n) + (vals(n + 1) - vals(n)) * (upto - n)));
+  }
+  function area(lo, hi, upto) {
+    ctx.beginPath(); line((i) => yv(band[i][hi]), upto);
+    const n = Math.min(years, Math.ceil(upto));
+    for (let i = n; i >= 0; i--) ctx.lineTo(px(Math.min(i, upto)), py(yv(band[Math.min(i, years)][lo])));
+    ctx.closePath(); ctx.fill();
+  }
   function draw(now) {
     const lt = document.documentElement.classList.contains('lt');
-    const base = lt ? '31,91,151' : '116,169,221', hi = lt ? '16,52,96' : '232,240,248';
+    const acc = lt ? '31,91,151' : '116,169,221', ink = lt ? '16,40,72' : '232,240,248', muted = lt ? '93,106,124' : '127,140,157';
+    const intro = still ? 1 : ease(Math.min(Math.max((now - t0) / INTRO_MS, 0), 1)), upto = intro * years;
     ctx.clearRect(0, 0, W, H);
-    // goal line
+    // axis: baseline and age ticks
+    ctx.font = '500 10.5px "Geist Mono", ui-monospace, monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.strokeStyle = `rgba(${muted},0.35)`; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x0, yBot + 0.5); ctx.lineTo(x1, yBot + 0.5); ctx.stroke();
+    ctx.fillStyle = `rgba(${muted},0.9)`;
+    for (const age of [30, 40, 50, 60, 65]) {
+      const x = px(age - age0);
+      ctx.beginPath(); ctx.moveTo(x, yBot); ctx.lineTo(x, yBot + 4); ctx.stroke();
+      ctx.fillText(age === 30 ? 'AGE 30' : String(age), x, yBot + 8);
+    }
+    // bands and median
+    ctx.fillStyle = `rgba(${acc},${lt ? 0.07 : 0.07})`; area(0, 4, upto);
+    ctx.fillStyle = `rgba(${acc},${lt ? 0.11 : 0.12})`; area(1, 3, upto);
+    // goal line + label
     const gy = py(yv(goal));
-    ctx.setLineDash([5, 6]); ctx.lineWidth = 1; ctx.strokeStyle = `rgba(${hi},${lt ? 0.28 : 0.32})`;
-    ctx.beginPath(); ctx.moveTo(x0, gy); ctx.lineTo(x1, gy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.setLineDash([3, 5]); ctx.strokeStyle = `rgba(${ink},${lt ? 0.35 : 0.4})`;
+    ctx.beginPath(); ctx.moveTo(x0, gy + 0.5); ctx.lineTo(x1, gy + 0.5); ctx.stroke(); ctx.setLineDash([]);
+    const my = py(yv(band[years][2]));
+    // end labels sit in the right gutter; nudged apart when the median ends near the goal
+    let gl = gy, ml = my;
+    if (Math.abs(gl - ml) < 15) { const mid = (gl + ml) / 2, up = gl <= ml; gl = mid + (up ? -8 : 8); ml = mid + (up ? 8 : -8); }
+    ctx.textBaseline = 'middle';
+    if (!narrow) { ctx.textAlign = 'left'; ctx.fillStyle = `rgba(${ink},${lt ? 0.6 : 0.7})`; ctx.fillText('GOAL $1.5M', x1 + 12, gl); }
     ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    // individual simulated paths
     for (const L of live) {
       const age = now - L.t0;
-      const prog = L.still ? 1 : ease(Math.min(age / DRAW_MS, 1));
-      const fade = L.still ? 0.55 : age < DRAW_MS + HOLD_MS ? 1 : Math.max(0, 1 - (age - DRAW_MS - HOLD_MS) / FADE_MS);
+      const prog = ease(Math.min(Math.max(age / DRAW_MS, 0), 1));
+      const fade = age < DRAW_MS + HOLD_MS ? 1 : Math.max(0, 1 - (age - DRAW_MS - HOLD_MS) / FADE_MS);
       if (fade <= 0) continue;
-      const end = prog * years, n = Math.floor(end);
-      const a = (L.p.hit ? (lt ? 0.5 : 0.62) : (lt ? 0.26 : 0.3)) * fade;
-      ctx.strokeStyle = `rgba(${L.p.hit ? hi : base},${a})`;
-      ctx.lineWidth = L.p.hit ? 1.4 : 1.1;
-      ctx.beginPath(); ctx.moveTo(px(0), py(L.p.pts[0]));
-      for (let i = 1; i <= n; i++) ctx.lineTo(px(i), py(L.p.pts[i]));
-      let hx = px(n), hy = py(L.p.pts[n]);
-      if (n < years) {
-        const f = end - n, v = L.p.pts[n] + (L.p.pts[n + 1] - L.p.pts[n]) * f;
-        hx = px(n + f); hy = py(v); ctx.lineTo(hx, hy);
+      const end = prog * years;
+      ctx.strokeStyle = L.p.hit ? `rgba(${ink},${(lt ? 0.55 : 0.6) * fade})` : `rgba(${acc},${(lt ? 0.45 : 0.5) * fade})`;
+      ctx.lineWidth = 1.1;
+      ctx.beginPath(); line((i) => L.p.pts[i], end); ctx.stroke();
+      if (prog < 1) {
+        const n = Math.floor(end), v = L.p.pts[n] + ((L.p.pts[Math.min(n + 1, years)] - L.p.pts[n]) * (end - n));
+        ctx.fillStyle = `rgba(${ink},${0.9 * fade})`;
+        ctx.beginPath(); ctx.arc(px(end), py(v), 2.2, 0, Math.PI * 2); ctx.fill();
       }
-      ctx.stroke();
-      if (!L.still && prog < 1) { // the "pen" at the tip while a path is being drawn
-        ctx.fillStyle = `rgba(${hi},${0.85 * fade})`;
-        ctx.beginPath(); ctx.arc(hx, hy, 2, 0, Math.PI * 2); ctx.fill();
-      }
+    }
+    // median on top
+    ctx.strokeStyle = `rgba(${acc},${lt ? 0.95 : 1})`; ctx.lineWidth = 2;
+    ctx.beginPath(); line((i) => yv(band[i][2]), upto); ctx.stroke();
+    if (intro >= 1) {
+      ctx.fillStyle = `rgba(${acc},1)`; ctx.beginPath(); ctx.arc(x1, my, 3, 0, Math.PI * 2); ctx.fill();
+      if (!narrow) { ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText('MEDIAN', x1 + 12, ml); }
     }
   }
   function loop(now) {
     if (!run) return;
-    if (now - lastSpawn > EVERY_MS) {
-      live.push({ p: paths[next], t0: now }); next = (next + 1) % POOL; lastSpawn = now;
+    if (now - t0 > INTRO_MS * 0.6 && now - lastSpawn > EVERY_MS) {
+      live.push({ p: paths[next], t0: now }); next = (next + 1) % paths.length; lastSpawn = now;
     }
     while (live.length && now - live[0].t0 > DRAW_MS + HOLD_MS + FADE_MS) live.shift();
     if (now - last > 33) { last = now; draw(now); }
@@ -414,15 +450,12 @@ const tiles = (() => {
     if (want && !run) { run = true; requestAnimationFrame(loop); } else if (!want) run = false;
   }
   function start() {
+    t0 = performance.now();
     size();
-    if (!still) { // start with a few paths already in flight so the hero is never empty
-      const now = performance.now();
-      for (let k = 0; k < 9; k++) { live.push({ p: paths[next], t0: now - (9 - k) * EVERY_MS }); next++; }
-      lastSpawn = now;
-    }
     let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(size, 150); });
     document.addEventListener('visibilitychange', go);
     new IntersectionObserver((e) => { vis = e[0].isIntersecting; go(); }).observe(cv);
+    if (document.fonts) document.fonts.ready.then(() => draw(performance.now()));
     go();
   }
   return { start, redraw: () => draw(performance.now()) };
