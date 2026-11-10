@@ -33,7 +33,9 @@ self.addEventListener('fetch', (event) => {
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     try {
-      const fresh = await fetch(request);
+      // Same-origin files are revalidated with the server every time (cheap 304s), so the
+      // browser's 10-minute HTTP cache can never pair an old page with new code.
+      const fresh = await fetch(url.origin === self.location.origin ? new Request(request, { cache: 'no-cache' }) : request);
       if (fresh.ok || fresh.type === 'opaque') cache.put(request, fresh.clone());
       return fresh;
     } catch {

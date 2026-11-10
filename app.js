@@ -3,6 +3,15 @@
 'use strict';
 const S = window.RetirementSim;
 const $ = (id) => document.getElementById(id);
+/* If a cached copy of an older page loaded this newer script, the page and code don't match:
+   reload once to fetch the current page instead of failing silently. */
+if (!$('empty') || !$('banner') || !document.querySelector('input[name="timing"]')) {
+  let tried = false;
+  try { tried = sessionStorage.getItem('retsim-reloaded') === '1'; sessionStorage.setItem('retsim-reloaded', '1'); } catch (e) { tried = true; }
+  if (!tried) location.reload();
+  throw new Error('Page and script versions differ; reloading.');
+}
+try { sessionStorage.removeItem('retsim-reloaded'); } catch (e) { /* storage blocked */ }
 const FIELDS = ['currentAge', 'retirementAge', 'contribution', 'startBalance', 'goal', 'simulations', 'timing', 'model', 'seed'];
 const MONEY = ['contribution', 'startBalance', 'goal'];
 const URL_KEYS = { currentAge: 'age', retirementAge: 'retire', contribution: 'save', startBalance: 'have', goal: 'goal', simulations: 'n', timing: 'timing', model: 'model', seed: 'seed' };
