@@ -290,7 +290,7 @@ function drawTable() {
     h += `<tr${key === 'probability' ? ' class="goal-row"' : ''}><td>${label}</td><td>${cell(st[key], kind)}</td>${A ? `<td>${cell(A[key], kind)}</td>${diff(st[key], A[key], kind)}` : ''}</tr>`;
   }
   $('ptable').innerHTML = h + '</tbody>';
-  $('pin-note').textContent = A ? `Scenario A: ${describe(pinned.v)}.` : 'Save these results as scenario A, change an input and run again to compare side by side.';
+  $('pin-note').textContent = A ? `Scenario A: ${describe(pinned.v)}.` : 'Save these results as scenario A, change an input and run again to compare side by side. A copied link opens these exact results for anyone.';
   $('pin-btn').textContent = A ? 'Replace scenario A' : 'Save as scenario A';
 }
 function describe(v) {
@@ -505,6 +505,20 @@ $('reset-btn').addEventListener('click', () => { setForm(S.DEFAULTS); touched.cl
 $('new-seed').addEventListener('click', () => { $('seed').value = Math.floor(Math.random() * 1e6); liveCheck(); });
 $('pin-btn').addEventListener('click', () => { if (current) { pinned = { v: current.v, stats: current.result.stats }; drawTable(); } });
 $('csv-btn').addEventListener('click', downloadCSV);
+/* Copy a link that reproduces these exact results (inputs and seed are in the URL). */
+if (location.protocol === 'file:') $('share-btn').hidden = true;   // offline copy has no shareable address
+$('share-btn').addEventListener('click', async () => {
+  const btn = $('share-btn'), url = location.href.split('#')[0];
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {
+    const t = document.createElement('textarea'); t.value = url; t.setAttribute('readonly', ''); t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.select();
+    try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+    t.remove();
+  }
+  btn.textContent = ok ? 'Link copied' : 'Copy failed: use the address bar';
+  setTimeout(() => { btn.textContent = 'Copy link to these results'; }, 2200);
+});
 syncThemeButton();
 let lastNarrow = null, rzc;
 addEventListener('resize', () => { clearTimeout(rzc); rzc = setTimeout(() => {
