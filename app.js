@@ -63,7 +63,7 @@ function fromURL() {
 function toURL(v) {
   const q = new URLSearchParams();
   for (const [k, p] of Object.entries(URL_KEYS)) q.set(p, v[k]);
-  history.replaceState(null, '', `${location.pathname}?${q}${location.hash}`);
+  try { history.replaceState(null, '', `${location.pathname}?${q}${location.hash}`); } catch (e) { /* some browsers block this for local files */ }
 }
 function showMessages(check) {
   for (const k of FIELDS) {
