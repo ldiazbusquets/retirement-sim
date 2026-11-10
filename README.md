@@ -22,11 +22,15 @@ Default inputs are the Mini Project 2 case (Emma: age 30, $12,000 a year, $1.5M 
 
 Limitations: price returns exclude dividends, amounts are nominal and pre-tax, and the whole balance is in one index. Educational use only, not financial advice.
 
+## Python notebook
+[Open in Colab](https://colab.research.google.com/github/ldiazbusquets/retirement-sim/blob/main/notebook/retirement_simulation.ipynb): `notebook/retirement_simulation.ipynb` runs the same simulation in Python, the way Mini Project 2 was done, and matches the website's results for Emma to the dollar. It also shows the hand checks, the what-ifs, and a plain NumPy version for comparison.
+
 ## Files
 | File | Purpose |
 |---|---|
 | `sim.js` | Simulation engine (pure functions, runs in the browser and in Node) |
 | `app.js`, `index.html`, `styles.css` | The page: form, charts, tables |
+| `notebook/retirement_simulation.ipynb` | Colab notebook: the same simulation in Python, matching the app |
 | `tests/reference.py` | Independent Python version of the notebook logic |
 | `tests/test_engine.py` | Tests: data, JS-vs-Python parity, finance checks, input validation |
 | `sw.js`, `manifest.webmanifest` | Installable app and offline use |
