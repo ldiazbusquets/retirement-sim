@@ -6,7 +6,7 @@
   --ln: rgba(214, 228, 248, .08); --ln2: rgba(214, 228, 248, .15);
   --ink: #f1f5fa; --t2: #a6b2c2; --t3: #7f8c9d;
   --acc: #74a9dd; --acc-soft: rgba(116, 169, 221, .14);
-  --hit: #6fcf9c; --miss: #5d7590; --goal: #d9e2ec; --bad: #ef7d6b;
+  --hit: #6fcf9c; --miss: #5d7590; --goal: #d9e2ec; --mid: #e9b25c; --bad: #ef7d6b;
   --band: rgba(116, 169, 221, .16); --band2: rgba(116, 169, 221, .32);
   --pill: #f1f5fa; --pill-ink: #0a1220;
   --shadow: 0 1px 0 rgba(255, 255, 255, .04) inset, 0 20px 50px -30px rgba(0, 0, 0, .7);
@@ -21,7 +21,7 @@ html.lt {
   --ln: rgba(14, 30, 54, .09); --ln2: rgba(14, 30, 54, .17);
   --ink: #0c1624; --t2: #46546a; --t3: #5d6a7c;
   --acc: #1f5b97; --acc-soft: rgba(31, 91, 151, .1);
-  --hit: #2a7a52; --miss: #9aabbf; --goal: #2b3747; --bad: #9e3622;
+  --hit: #2a7a52; --miss: #9aabbf; --goal: #2b3747; --mid: #946112; --bad: #9e3622;
   --band: rgba(31, 91, 151, .12); --band2: rgba(31, 91, 151, .26);
   --pill: #0c1624; --pill-ink: #f6f8fa;
   --shadow: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 20px 45px -32px rgba(20, 40, 70, .35);
