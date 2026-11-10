@@ -101,8 +101,8 @@
         <fieldset class="field toggle">
           <legend>Contributions made</legend>
           <div class="seg">
-            <label><input type="radio" name="timing" value="end"><span>End of year</span></label>
             <label><input type="radio" name="timing" value="begin"><span>Start of year</span></label>
+            <label><input type="radio" name="timing" value="end"><span>End of year</span></label>
           </div>
         </fieldset>
         <fieldset class="field toggle">
@@ -200,7 +200,7 @@
         <article class="glass panel">
           <h3>2 · One simulated future</h3>
           <p>Each year until retirement, the simulator draws a return and updates the balance:</p>
-          <p class="formula"><code>end of year: B = B × (1 + r) + C</code><br><code>start of year: B = (B + C) × (1 + r)</code></p>
+          <p class="formula"><code>start of year: B = (B + C) × (1 + r)</code><br><code>end of year: B = B × (1 + r) + C</code></p>
           <p>With the normal model, <code>r</code> is drawn from a normal distribution with the historical mean and standard deviation (a return can't fall below −100%). With the historical model, <code>r</code> is one of the 94 real years, picked at random with replacement.</p>
         </article>
         <article class="glass panel">

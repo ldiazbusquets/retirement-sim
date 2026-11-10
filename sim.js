@@ -22,7 +22,7 @@
   const SIM_OPTIONS = [1000, 5000, 10000, 25000, 50000];
   const DEFAULTS = {
     currentAge: 30, retirementAge: 65, contribution: 12000, startBalance: 0, goal: 1500000,
-    simulations: 10000, timing: 'end', model: 'normal', seed: 2026,
+    simulations: 10000, timing: 'begin', model: 'normal', seed: 2026,  // start of year, as in our Mini Project 2
   };
 
   /** Seeded random numbers (mulberry32): the same seed always gives the same sequence. */

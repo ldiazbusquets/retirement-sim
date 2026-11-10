@@ -12,7 +12,7 @@ FIN 414 Applied Project I · Group 6
 This notebook runs the **same simulation as our web app** ([live app](https://ldiazbusquets.github.io/retirement-sim/)) in Python, the way we did [Mini Project 2](https://colab.research.google.com/drive/1CneUfRILPvuPLPJIDTyWolI1Qd1K_K1Q?usp=sharing) in Colab. It shows that the app keeps the mini project's logic:
 
 1. the same S&P 500 data (^GSPC year-end closes, 1929–2023 → 94 annual returns),
-2. the same year-by-year formula: `balance = balance × (1 + return) + contribution`,
+2. the same year-by-year formula as our mini project: `balance = (balance + contribution) × (1 + return)` (deposit at the start of each year),
 3. the same loops: 35 years inside 10,000 simulations,
 4. the same outputs: mean, median, probability of reaching the goal, 5th and 95th percentiles, and a histogram.
 
@@ -69,7 +69,8 @@ if 'sp500_annual_ret_list' in globals():
 md("## 3. Emma's inputs (the app's defaults)"),
 code("""current_age    = 30
 retirement_age = 65
-contribution   = 12_000      # dollars per year, added at the END of each year (as in Mini Project 2)
+contribution   = 12_000      # dollars per year
+timing         = 'begin'     # added at the START of each year, as in our Mini Project 2
 start_balance  = 0
 goal           = 1_500_000
 n_sims         = 10_000
@@ -98,7 +99,7 @@ def normal_return(rand):
     return max(mean + sd * z, -1.0)                                  # can't lose more than 100%"""),
 md("## 5. The simulation (same loops as Mini Project 2)"),
 code("""def simulate(contribution=contribution, years=years, start_balance=start_balance,
-             n_sims=n_sims, seed=seed, timing='end', model='normal'):
+             n_sims=n_sims, seed=seed, timing=timing, model='normal'):
     rand = mulberry32(seed)
     outcomes = []
     for s in range(n_sims):                      # outer loop: one simulated life per pass
@@ -139,8 +140,8 @@ plt.show()"""),
 md("""## 7. Does it match the website?
 
 These are the numbers the live app shows for Emma's default case (seed 2026). The notebook should match them to the dollar."""),
-code("""app = {'Probability of reaching goal': 0.4727, 'Mean': 1936154.41, 'Median': 1428050.82,
-       '5th percentile': 438972.59, '95th percentile': 5081918.12}
+code("""app = {'Probability of reaching goal': 0.5046, 'Mean': 2086940.59, 'Median': 1516203.76,
+       '5th percentile': 447012.84, '95th percentile': 5564159.83}
 mine = {'Probability of reaching goal': (wealth >= goal).mean(), 'Mean': wealth.mean(), 'Median': np.median(wealth),
         '5th percentile': np.percentile(wealth, 5), '95th percentile': np.percentile(wealth, 95)}
 check = pd.DataFrame({'Website': app, 'Notebook': mine})
@@ -150,13 +151,14 @@ check.assign(
     Website=[fmt(k, x) for k, x in check['Website'].items()],
     Notebook=[fmt(k, x) for k, x in check['Notebook'].items()])"""),
 md("## 8. Hand checks (answers we know without simulating)"),
-code("""fv_annuity = contribution * ((1 + mean) ** years - 1) / mean
+code("""# Future value of an annuity due (deposits at the start of each year), at the average return
+fv_annuity_due = contribution * ((1 + mean) ** years - 1) / mean * (1 + mean)
 print(f"0% returns every year: ${contribution * years:,.0f}  (12,000 x 35)")
-print(f"Expected mean from the formula: ${fv_annuity:,.0f}   Simulated mean: ${wealth.mean():,.0f}  "
-      f"({wealth.mean() / fv_annuity - 1:+.1%}, normal random variation)")
-w_begin = simulate(timing='begin')
-print(f"Beginning-of-year contributions raise the mean by {w_begin.mean() / wealth.mean() - 1:.1%} "
-      f"(one extra year of growth = {mean:.1%})")"""),
+print(f"Expected mean from the formula: ${fv_annuity_due:,.0f}   Simulated mean: ${wealth.mean():,.0f}  "
+      f"({wealth.mean() / fv_annuity_due - 1:+.1%}, normal random variation)")
+w_end = simulate(timing='end')
+print(f"Moving deposits to the end of each year lowers the mean by {1 - w_end.mean() / wealth.mean():.1%} "
+      f"(one less year of growth on each deposit; average return = {mean:.1%})")"""),
 md("""## 9. What-ifs (same as the demo)"""),
 code("""cases = {
     'Emma (default)':                 simulate(),
@@ -165,15 +167,35 @@ code("""cases = {
     'Historical years instead':       simulate(model='historical'),
 }
 pd.DataFrame({name: {'Chance of goal': f"{(w >= goal).mean():.1%}", 'Median': f"${np.median(w):,.0f}"} for name, w in cases.items()}).T"""),
-md("""## 10. For comparison: the NumPy way (like our original notebook)
+md("""## 10. Our Mini Project 2 simulation code, unchanged
 
-Using `np.random.normal` gives different random numbers, so the results differ slightly from the app, by the normal sampling noise of 10,000 runs (about 1 percentage point on the probability). This is test 1 in our design document: *matches the notebook within about 1–2%.*"""),
-code("""rng = np.random.default_rng(42)
-r = rng.normal(mean, sd, size=(n_sims, years))
-w_np = np.zeros(n_sims)
-for y in range(years):
-    w_np = w_np * (1 + r[:, y]) + contribution
-pd.DataFrame({'Seeded (matches app)': summary(wealth), 'NumPy normal': summary(w_np)})"""),
+This is the simulation cell from our Mini Project 2 submission: `np.random.seed(42)`, a normal distribution with the mean and sample standard deviation of the 94 returns, deposits at the start of each year, and two loops. NumPy's random numbers differ from the app's, so the results differ slightly, by the normal sampling noise of 10,000 runs. This is test 1 in our design document: *matches the notebook within about 1–2%.*"""),
+code("""sp500_annual_ret_list = returns_app.tolist() if 'sp500_annual_ret_list' not in globals() else sp500_annual_ret_list
+
+np.random.seed(42)
+
+# Parameters from historical S&P 500 annual returns
+mu = np.mean(sp500_annual_ret_list)
+sigma = np.std(sp500_annual_ret_list, ddof=1)
+print(f"Historical mean: {mu:.4f}, volatility: {sigma:.4f}")
+
+n_sims = 10_000
+years = 35                 # age 30 -> 65, 35 contributions
+contribution = 12_000
+goal = 1_500_000
+
+final_wealth = []          # stores 10,000 outcomes
+
+for sim in range(n_sims):              # one simulated lifetime
+    balance = 0
+    for year in range(years):          # one year
+        r = np.random.normal(mu, sigma)
+        balance = (balance + contribution) * (1 + r)   # deposit at start of year
+    final_wealth.append(balance)
+
+final_wealth = np.array(final_wealth)
+
+pd.DataFrame({'App / this notebook (seed 2026)': summary(wealth), 'Mini Project 2 code (seed 42)': summary(final_wealth)})"""),
 ]
 nb = nbf.v4.new_notebook(cells=cells, metadata={"kernelspec": {"name": "python3", "display_name": "Python 3", "language": "python"}, "colab": {"provenance": []}})
 out = Path(__file__).resolve().parent.parent / "notebook" / "retirement_simulation.ipynb"
